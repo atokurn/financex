@@ -1,0 +1,299 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String             @id @default(cuid())
+  name              String?
+  email             String             @unique
+  password          String?
+  emailVerified     DateTime?
+  image             String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  isVerified        Boolean            @default(false)
+  accounts          Account[]
+  sessions          Session[]
+  verificationToken VerificationToken?
+  products          Product[]
+  materials         Material[]
+  orders            Order[]
+  sales             Sale[]
+  purchases         Purchase[]
+  expenses          Expense[]
+  stockHistories    StockHistory[]
+  productMaterials  ProductMaterials[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model VerificationToken {
+  id      String   @id @default(cuid())
+  token   String   @unique
+  expires DateTime
+  userId  String   @unique
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Material {
+  id             String             @id @default(cuid())
+  userId         String
+  code           String             @unique
+  name           String             @db.VarChar(255)
+  description    String?
+  unit           String             @db.VarChar(50)
+  price          Float              @default(0)
+  stock          Int                @default(0)
+  minStock       Int                @default(0)
+  category       String             @db.VarChar(100)
+  status         String             @default("active") @db.VarChar(50)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  products       ProductMaterials[]
+  stockHistories StockHistory[]
+  purchaseItems  PurchaseItem[]
+  user           User               @relation(fields: [userId], references: [id])
+
+  @@index([code])
+  @@index([category])
+  @@index([status])
+  @@index([userId])
+}
+
+model Product {
+  id             String             @id @default(cuid())
+  userId         String
+  name           String             @db.VarChar(255)
+  sku            String             @unique @db.VarChar(100)
+  description    String?
+  price          Float              @default(0)
+  stock          Int                @default(0)
+  minStock       Int                @default(0)
+  category       String             @db.VarChar(100)
+  image          String?
+  useMaterial    Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  materials      ProductMaterials[]
+  stockHistories StockHistory[]
+  purchaseItems  PurchaseItem[]
+  user           User               @relation(fields: [userId], references: [id])
+
+  @@index([sku])
+  @@index([category])
+  @@index([userId])
+}
+
+model ProductMaterials {
+  id         String   @id @default(cuid())
+  userId     String
+  productId  String
+  materialId String
+  quantity   Float    @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([productId, materialId])
+  @@index([productId])
+  @@index([materialId])
+  @@index([userId])
+}
+
+model StockHistory {
+  id          String    @id @default(cuid())
+  userId      String
+  materialId  String?
+  productId   String?
+  type        String    @db.VarChar(50)
+  quantity    Int
+  description String?
+  reference   String?   @db.VarChar(100)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  material    Material? @relation(fields: [materialId], references: [id])
+  product     Product?  @relation(fields: [productId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([materialId])
+  @@index([productId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model Purchase {
+  id                String    @id @default(cuid())
+  userId            String
+  invoiceNumber     String    @unique @default("INV/PO/000000/000") @db.VarChar(100)
+  supplier          String    @db.VarChar(255)
+  reference         String?   @db.VarChar(100)
+  notes             String?   @db.Text
+  orderType         String    @default("offline") @db.VarChar(50)
+  status            String    @default("pending") @db.VarChar(50)
+  discount          Float     @default(0)
+  discountType      String    @default("nominal") @db.VarChar(50)
+  autoUpdatePrice   Boolean   @default(false)
+  additionalCosts   AdditionalCost[]
+  items             PurchaseItem[]
+  subtotal          Float     @default(0)
+  total             Float     @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  user              User      @relation(fields: [userId], references: [id])
+
+  @@index([status])
+  @@index([orderType])
+  @@index([createdAt])
+  @@index([userId])
+  @@index([invoiceNumber])
+}
+
+model PurchaseItem {
+  id                String    @id @default(cuid())
+  purchaseId        String
+  materialId        String?
+  productId         String?
+  type              String    @db.VarChar(50)
+  quantity          Int
+  unit              String    @default("pcs") @db.VarChar(50)
+  price             Float     @default(0)
+  itemDiscount      Float     @default(0)
+  itemDiscountType  String    @default("percentage") @db.VarChar(50)
+  totalPrice        Float     @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  purchase          Purchase  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  material          Material? @relation(fields: [materialId], references: [id])
+  product           Product?  @relation(fields: [productId], references: [id])
+
+  @@index([purchaseId])
+  @@index([materialId])
+  @@index([productId])
+  @@index([type])
+}
+
+model AdditionalCost {
+  id          String   @id @default(cuid())
+  purchaseId  String
+  description String   @db.VarChar(255)
+  amount      Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  purchase    Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseId])
+}
+
+model Sale {
+  id                  String   @id @default(cuid())
+  userId              String
+  orderId             String   @unique @db.VarChar(100)
+  orderAt             DateTime
+  income              Float    @default(0)
+  priceAfterDiscount  Float    @default(0)
+  totalFees           Float    @default(0)
+  platformFees        Float    @default(0)
+  affiliateCommission Float    @default(0)
+  refund              Float    @default(0)
+  platform            String   @db.VarChar(100)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id])
+
+  @@index([orderId])
+  @@index([platform])
+  @@index([userId])
+}
+
+model Order {
+  id          String   @id @default(cuid())
+  orderId     String
+  sku         String   @default("NO SKU")
+  customer    String
+  productName String
+  quantity    Int
+  totalOrder  Float
+  status      String   @default("pending")
+  regency     String
+  province    String
+  orderAt     DateTime @default(now())
+  platform    String
+  orderType   String
+  reference   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, sku])
+  @@index([orderId])
+  @@index([sku])
+  @@index([status])
+  @@index([platform])
+  @@index([userId])
+  @@index([orderType])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payee       String?
+  category    String   @default("operational")
+  reference   String?
+  notes       String?
+  dueDate     DateTime?
+  dueTime     String?
+  paymentType String   @default("cash")
+  attachments String[]
+  items       ExpenseItem[]
+  total       Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model ExpenseItem {
+  id          String    @id @default(cuid())
+  expenseId   String
+  expense     Expense   @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  description String
+  price       Float
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([expenseId])
+}

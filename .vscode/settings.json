@@ -1,0 +1,17 @@
+{
+    "sqltools.connections": [
+        {
+            "pgOptions": {
+                "connectionTimeoutMillis": 30
+            },
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 5432,
+            "driver": "PostgreSQL",
+            "name": "db_financex",
+            "database": "financex",
+            "username": "uascuti",
+            "password": "dbP455w0rd!1"
+        }
+    ]
+}
