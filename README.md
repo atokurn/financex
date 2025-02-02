@@ -17,23 +17,24 @@ bun dev
 ## Add env file
 
 ```bash
-DATABASE_URL="postgresql://uascuti:dbP455w0rd!1@localhost:5432/financex?schema=public"
-NEXTAUTH_SECRET="D5UHav6IDWQ5KUHzxwwkG9PG6Z4iyfkCHRZ+cy9jVXQ="
+DATABASE_URL="postgresql://username:password@localhost:5432/financex?schema=public"
+NEXTAUTH_SECRET="D5UHav6..."
 NEXTAUTH_URL="http://localhost:3000"
 
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=orilodays@gmail.com
-SMTP_PASSWORD=emtu nmhg xlut tbps
+SMTP_USER=emailmu@gmail.com
+SMTP_PASSWORD=password apps google
 SMTP_FROM=FinanceX Demo
 SMTP_SECURE=false
 
-GOOGLE_CLIENT_ID=730878872302-gdgafjre0o6v300hqoffc2gpjh1d4g3u.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=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
+//social login
+GOOGLE_CLIENT_ID=730878872302...
+GOOGLE_CLIENT_SECRET=GOCSPX-..
 APPLE_ID=your_apple_client_id
 APPLE_SECRET=your_apple_client_secret
 
-NEXTAUTH_SECRET=TarSoCgDL5+TYdHCv3umVjRcyttQYBLdtQJWk0sGPeg=
+NEXTAUTH_SECRET=TarSoCgDL5+...
 NEXTAUTH_URL=http://localhost:3000
 
 BASE_URL=http://localhost:3000
