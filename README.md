@@ -14,6 +14,31 @@ pnpm dev
 bun dev
 ```
 
+## Add env file
+
+```bash
+DATABASE_URL="postgresql://username:password@localhost:5432/financex?schema=public"
+NEXTAUTH_SECRET="D5UHav6..."
+NEXTAUTH_URL="http://localhost:3000"
+
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=emailmu@gmail.com
+SMTP_PASSWORD=password apps google
+SMTP_FROM=FinanceX Demo
+SMTP_SECURE=false
+
+//social login
+GOOGLE_CLIENT_ID=730878872302...
+GOOGLE_CLIENT_SECRET=GOCSPX-..
+APPLE_ID=your_apple_client_id
+APPLE_SECRET=your_apple_client_secret
+
+NEXTAUTH_SECRET=TarSoCgDL5+...
+NEXTAUTH_URL=http://localhost:3000
+
+BASE_URL=http://localhost:3000
+```
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
