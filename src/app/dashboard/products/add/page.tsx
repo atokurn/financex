@@ -21,10 +21,12 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useDropzone } from 'react-dropzone'
 import Image from 'next/image'
 import { Switch } from "@/components/ui/switch"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { X } from "lucide-react"
 import { MaterialSelectDialog } from "@/components/material-select-dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { useToast } from "@/hooks/use-toast"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
 
 interface Material {
   id: string
@@ -51,6 +53,8 @@ export default function AddProductPage() {
   const [selectedMaterials, setSelectedMaterials] = useState<SelectedMaterial[]>([])
   const [materialDialogOpen, setMaterialDialogOpen] = useState(false)
   const [materialInputs, setMaterialInputs] = useState<{ [key: string]: string }>({})
+  const [error, setError] = useState<string | null>(null)
+  const { toast } = useToast()
 
   // Calculate maximum possible stock based on material quantities
   const calculateMaxStock = () => {
@@ -163,6 +167,7 @@ export default function AddProductPage() {
     if (!formRef.current) return
 
     setLoading(true)
+    setError(null)
 
     try {
       let imagePath = '/images/products/placeholder.jpg'
@@ -176,7 +181,8 @@ export default function AddProductPage() {
         })
         
         if (!uploadResponse.ok) {
-          throw new Error('Failed to upload image')
+          const errorData = await uploadResponse.json().catch(() => null);
+          throw new Error(errorData?.error || 'Failed to upload image');
         }
         
         const { path } = await uploadResponse.json()
@@ -185,12 +191,12 @@ export default function AddProductPage() {
 
       const form = formRef.current
       const data = {
-        name: form.name.value,
-        sku: form.sku.value,
-        price: parseFloat(form.price.value),
-        stock: parseInt(form.stock.value),
-        minStock: parseInt(form.minStock.value),
-        category: form.category.value,
+        name: (form.elements.namedItem('name') as HTMLInputElement).value,
+        sku: (form.elements.namedItem('sku') as HTMLInputElement).value,
+        price: parseFloat((form.elements.namedItem('price') as HTMLInputElement).value),
+        stock: parseInt((form.elements.namedItem('stock') as HTMLInputElement).value),
+        minStock: parseInt((form.elements.namedItem('minStock') as HTMLInputElement).value),
+        category: (form.elements.namedItem('category') as HTMLInputElement).value,
         image: imagePath,
         useMaterial,
         materials: useMaterial ? selectedMaterials.map(m => ({
@@ -207,14 +213,38 @@ export default function AddProductPage() {
         body: JSON.stringify(data),
       })
 
+      const responseData = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to create product')
+        // Extract detailed error information
+        const errorMessage = responseData.error || 'Failed to create product';
+        const errorDetails = responseData.details ? `: ${responseData.details}` : '';
+        throw new Error(`${errorMessage}${errorDetails}`);
       }
+
+      toast({
+        title: "Success!",
+        description: "Product created successfully",
+        duration: 3000,
+      });
 
       router.push('/dashboard/products')
       router.refresh()
     } catch (error) {
-      console.error('Error:', error)
+      console.error('Error creating product:', error)
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to create product';
+      
+      setError(errorMessage);
+      
+      toast({
+        variant: "destructive",
+        title: "Error creating product",
+        description: errorMessage,
+        duration: 5000,
+      });
     } finally {
       setLoading(false)
     }
@@ -252,6 +282,13 @@ export default function AddProductPage() {
             </CardHeader>
             <form ref={formRef} onSubmit={onSubmit}>
               <CardContent className="space-y-4">
+                {error && (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
                 <div 
                   {...getRootProps()} 
                   className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${

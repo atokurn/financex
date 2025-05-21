@@ -113,6 +113,10 @@ const data = {
           title: "Account integration",
           url: "/dashboard/integrations",
         },
+        {
+          title: "Backup Data",
+          url: "/dashboard/backup",
+        },
       ],
     },
   ],

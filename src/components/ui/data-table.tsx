@@ -15,6 +15,8 @@ import {
   getSortedRowModel,
   useReactTable,
   FilterFn,
+  OnChangeFn,
+  PaginationState
 } from "@tanstack/react-table"
 
 import {
@@ -29,6 +31,9 @@ import {
 import { DataTablePagination } from "@/components/data-table-pagination"
 import { DataTableToolbar } from "@/components/data-table-toolbar"
 import { Skeleton } from "./skeleton"
+
+// Import DateRange type from react-day-picker or define it
+import { DateRange } from "react-day-picker"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -47,6 +52,7 @@ interface DataTableProps<TData, TValue> {
   setDate?: (date: DateRange | undefined) => void
   columnVisibility?: VisibilityState
   setColumnVisibility?: (visibility: VisibilityState) => void
+  tableId?: string // Unique ID for the table, used for persisting state
 }
 
 // Custom filter function that handles objects and arrays
@@ -54,21 +60,21 @@ const globalFilterFn: FilterFn<any> = (row, columnId, filterValue) => {
   const searchValue = filterValue.toLowerCase()
   
   // Function to check if a value matches the search
-  const matchesSearch = (value: any): boolean => {
+  const matchesSearch = (value: unknown): boolean => {
     if (value == null) return false
     
     if (typeof value === 'object') {
       if (Array.isArray(value)) {
         return value.some(matchesSearch)
       }
-      return Object.values(value).some(matchesSearch)
+      return Object.values(value as Record<string, unknown>).some(matchesSearch)
     }
     
     return String(value).toLowerCase().includes(searchValue)
   }
 
   // Search through all values in the row
-  return Object.values(row.original).some(matchesSearch)
+  return Object.values(row.original as Record<string, unknown>).some(matchesSearch)
 }
 
 export function DataTable<TData, TValue>({
@@ -85,11 +91,13 @@ export function DataTable<TData, TValue>({
   setDate,
   columnVisibility: initialColumnVisibility,
   setColumnVisibility: onColumnVisibilityChange,
+  tableId = 'default-table',
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(
     initialColumnVisibility || {}
   )
+  const prevDataRef = React.useRef<TData[]>([])
 
   React.useEffect(() => {
     if (initialColumnVisibility) {
@@ -111,11 +119,17 @@ export function DataTable<TData, TValue>({
   }, [])
 
   React.useEffect(() => {
-    // Only reset pagination when data changes and the component is mounted
-    if (mounted && data.length) {
+    // Hanya reset local pagination jika:
+    // 1. Component telah di-mount
+    // 2. Ada data
+    // 3. External pagination TIDAK disediakan
+    // 4. Dan ini adalah render pertama kali (menghindari reset pada update data real-time)
+    if (mounted && data.length && !pagination && !prevDataRef.current.length) {
       setLocalPagination((prev) => ({ ...prev, pageIndex: 0 }))
     }
-  }, [data, mounted])
+    // Simpan data saat ini sebagai referensi untuk render berikutnya
+    prevDataRef.current = data;
+  }, [data, mounted, pagination]) // Add pagination to dependency array
 
   const table = useReactTable({
     data,
@@ -132,9 +146,28 @@ export function DataTable<TData, TValue>({
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
-    onColumnVisibilityChange: onColumnVisibilityChange || setColumnVisibility,
+    onColumnVisibilityChange: (visibility) => {
+      if (onColumnVisibilityChange) {
+        onColumnVisibilityChange(visibility);
+      } else {
+        setColumnVisibility(visibility);
+      }
+    },
     onGlobalFilterChange: setGlobalFilter,
-    onPaginationChange: setPagination || setLocalPagination,
+    onPaginationChange: (value) => {
+      if (setPagination) {
+        // Convert Updater<PaginationState> to { pageIndex, pageSize }
+        if (typeof value === 'function') {
+          const currentPagination = pagination || localPagination;
+          const newPagination = value(currentPagination);
+          setPagination(newPagination);
+        } else {
+          setPagination(value);
+        }
+      } else {
+        setLocalPagination(value as PaginationState);
+      }
+    },
     globalFilterFn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -142,6 +175,8 @@ export function DataTable<TData, TValue>({
     getSortedRowModel: getSortedRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
+    // Disable auto reset of pagination index
+    autoResetPageIndex: false,
   })
 
   return (
@@ -160,7 +195,10 @@ export function DataTable<TData, TValue>({
           onDelete={onDelete ? 
             () => {
               const selectedRows = table.getFilteredSelectedRowModel().rows
-              const ids = selectedRows.map(row => (row.original as any).id)
+              const ids = selectedRows.map(row => {
+                const original = row.original as Record<string, string>;
+                return original.id || '';
+              })
               if (ids.length === 1 && onDelete) {
                 onDelete(ids[0])
               } else if (ids.length > 1 && onBulkDelete) {
@@ -237,7 +275,7 @@ export function DataTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
-      <DataTablePagination table={table} />
+      <DataTablePagination table={table} tableId={tableId} />
     </div>
   )
 }

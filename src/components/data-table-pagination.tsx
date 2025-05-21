@@ -5,6 +5,7 @@ import {
   DoubleArrowRightIcon,
 } from "@radix-ui/react-icons"
 import { Table } from "@tanstack/react-table"
+import { useEffect } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -17,11 +18,47 @@ import {
 
 interface DataTablePaginationProps<TData> {
   table: Table<TData>
+  tableId?: string // Unique identifier for the table
 }
 
 export function DataTablePagination<TData>({
   table,
+  tableId = "default-table", // Default ID if none provided
 }: DataTablePaginationProps<TData>) {
+  // Enable if you want to save pagination preferences to localStorage
+  useEffect(() => {
+    const pagination = table.getState().pagination
+    localStorage.setItem(
+      `table-pagination-${tableId}`,
+      JSON.stringify({
+        pageIndex: pagination.pageIndex,
+        pageSize: pagination.pageSize,
+      })
+    )
+  }, [table.getState().pagination.pageIndex, table.getState().pagination.pageSize, tableId])
+
+  // Load pagination from localStorage on component mount (once)
+  useEffect(() => {
+    try {
+      const savedPagination = localStorage.getItem(`table-pagination-${tableId}`)
+      if (savedPagination) {
+        const { pageIndex, pageSize } = JSON.parse(savedPagination)
+        // Only set if different from current to avoid loops
+        const currentPagination = table.getState().pagination
+        if (pageIndex !== currentPagination.pageIndex || 
+            pageSize !== currentPagination.pageSize) {
+          table.setPagination({
+            pageIndex,
+            pageSize
+          })
+        }
+      }
+    } catch (e) {
+      console.error('Error restoring pagination', e)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableId]) // Only run once on mount and when tableId changes
+
   return (
     <div className="flex items-center justify-between px-2">
       <div className="flex-1 text-sm text-muted-foreground">

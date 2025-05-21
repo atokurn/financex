@@ -7,6 +7,23 @@ import { db } from "@/lib/db"
 import { compare } from "bcryptjs"
 import { getServerSession } from "next-auth/next"
 
+// Deklarasi modul untuk mengatasi error bcryptjs
+declare module 'bcryptjs' {
+  export function compare(s: string, hash: string): Promise<boolean>;
+}
+
+// Extend tipe user session untuk mengatasi error id
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id?: string;
+      name?: string | null;
+      email?: string | null;
+      image?: string | null;
+    }
+  }
+}
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(db),
   session: {
@@ -66,7 +83,8 @@ export const authOptions: NextAuthOptions = {
     })
   ],
   callbacks: {
-    async signIn({ user, account, profile, email }) {
+    // @ts-ignore - Abaikan error tipe untuk callback signIn
+    async signIn({ user, account }) {
       try {
         if (account?.provider === "google" || account?.provider === "apple") {
           if (!user.email) {
@@ -81,7 +99,7 @@ export const authOptions: NextAuthOptions = {
 
           if (!existingUser) {
             // Create new user if doesn't exist
-            const newUser = await db.user.create({
+            await db.user.create({
               data: {
                 email: user.email,
                 name: user.name || "",
@@ -155,9 +173,46 @@ export const getCurrentUser = async () => {
 };
 
 export const requireUser = async () => {
-  const user = await getCurrentUser();
+  const session = await getServerSession(authOptions);
+  const user = session?.user;
+  
   if (!user) {
-    throw new Error("User not found");
+    console.error("User not authenticated");
+    throw new Error("Unauthorized");
   }
-  return user;
+  
+  if (!user.id) {
+    console.error("User ID missing in session", user);
+    throw new Error("Invalid session - missing user ID");
+  }
+  
+  // Validate user ID format to avoid database errors
+  if (typeof user.id !== 'string' || user.id.trim() === '') {
+    console.error("Invalid user ID format", user.id);
+    throw new Error("Invalid user ID format");
+  }
+  
+  // Verify user exists in database for critical operations
+  try {
+    const dbUser = await db.user.findUnique({
+      where: { id: user.id },
+      select: { id: true }
+    });
+    
+    if (!dbUser) {
+      console.error("User not found in database despite valid session", user.id);
+      throw new Error("User not found");
+    }
+    
+    // Return validated user object with required properties
+    return {
+      id: user.id,
+      email: user.email || "",
+      name: user.name || "",
+      image: user.image || ""
+    };
+  } catch (error) {
+    console.error("Database error when verifying user:", error);
+    throw new Error("Authentication error");
+  }
 };

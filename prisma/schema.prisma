@@ -28,6 +28,7 @@ model User {
   expenses          Expense[]
   stockHistories    StockHistory[]
   productMaterials  ProductMaterials[]
+  backupHistories   BackupHistory[]
 }
 
 model Account {
@@ -296,4 +297,17 @@ model ExpenseItem {
   updatedAt   DateTime  @updatedAt
 
   @@index([expenseId])
+}
+
+model BackupHistory {
+  id          String   @id @default(cuid())
+  userId      String
+  filename    String
+  format      String   @db.VarChar(10) // json, xlsx, sql
+  fileSize    Int      // in bytes
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
 }
