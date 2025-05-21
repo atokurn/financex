@@ -6,7 +6,17 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { ProductSelectionDialog } from "@/components/product-selection-dialog"
 import { Switch } from "@/components/ui/switch"
-import { AdditionalCostDialog } from "@/components/additional-cost-dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { toast } from "sonner"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -27,17 +37,17 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { toast } from "sonner"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar as CalendarIcon, Check, ChevronsUpDown, Plus } from "lucide-react"
+import { Calendar as CalendarIcon, Check, ChevronsUpDown, Plus, Save, Download, FileText } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Calendar } from "@/components/ui/calendar"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
 import { TimeField } from "@/components/ui/time-field"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { generateInvoice } from "@/lib/generate-invoice"
 
 interface Material {
   id: string
@@ -109,7 +119,10 @@ export default function NewPurchasePage() {
   const [selectedTime, setSelectedTime] = useState(format(new Date(), "HH:mm:ss"))
   const [autoUpdatePrice, setAutoUpdatePrice] = useState(true)
   const [showTooltip, setShowTooltip] = useState(true)
-
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+  const [purchaseData, setPurchaseData] = useState<any>(null)
+  const [tempPurchaseId, setTempPurchaseId] = useState<string | null>(null)
+  
   useEffect(() => {
     if (!invoiceNumber) {
       const date = new Date()
@@ -257,57 +270,60 @@ export default function NewPurchasePage() {
       return
     }
 
+    // Prepare purchase data but don't send it yet
+    const preparedPurchaseData = {
+      invoiceNumber,
+      supplier,
+      date: format(selectedDate, 'yyyy-MM-dd'),
+      time: selectedTime,
+      items: selectedItems.map(item => {
+        const itemId = item.id
+        const itemQuantity = itemQuantities[itemId] || 1
+        const storedPrice = itemPrices[itemId]
+        
+        let itemPrice = storedPrice
+        if (!storedPrice) {
+          itemPrice = item.type === 'material' ? item.price : (item.buyPrice || 0)
+        }
+
+        return {
+          materialId: item.type === 'material' ? itemId : null,
+          productId: item.type === 'product' ? itemId : null,
+          type: item.type,
+          quantity: itemQuantity,
+          price: itemPrice,
+          unit: 'unit' in item ? item.unit : 'pcs',
+          itemDiscount: itemDiscounts[itemId] || 0,
+          itemDiscountType: 'percentage',
+          totalPrice: calculateItemTotal(itemId)
+        }
+      }),
+      additionalCosts: additionalCosts.map(cost => ({
+        description: cost.description,
+        amount: Number(cost.amount)
+      })),
+      autoUpdatePrice,
+      status: 'pending',
+      orderType,
+      reference,
+      notes: reference,
+      discount: discountValue ? Number(discountValue) : 0,
+      discountType: discountType || 'nominal',
+      subtotal: totals.items,
+      total: totals.total
+    }
+
+    // Store the data temporarily and show the save dialog
+    setPurchaseData(preparedPurchaseData)
+    setSaveDialogOpen(true)
+  }
+
+  // Function to save purchase with or without downloading invoice
+  const savePurchase = async (downloadInvoiceAfterSave = false) => {
+    if (!purchaseData) return
+    
     setLoading(true)
     try {
-      const purchaseData = {
-        invoiceNumber,
-        supplier,
-        date: format(selectedDate, 'yyyy-MM-dd'),
-        time: selectedTime,
-        items: selectedItems.map(item => {
-          const itemId = item.id
-          const itemQuantity = itemQuantities[itemId] || 1
-          const storedPrice = itemPrices[itemId]
-          
-          let itemPrice = storedPrice
-          if (!storedPrice) {
-            itemPrice = item.type === 'material' ? item.price : (item.buyPrice || 0)
-          }
-
-          console.log('Processing item:', {
-            id: itemId,
-            type: item.type,
-            price: itemPrice,
-            originalItem: item
-          })
-
-          return {
-            materialId: item.type === 'material' ? itemId : null,
-            productId: item.type === 'product' ? itemId : null,
-            type: item.type,
-            quantity: itemQuantity,
-            price: itemPrice,
-            unit: 'unit' in item ? item.unit : 'pcs',
-            itemDiscount: itemDiscounts[itemId] || 0,
-            itemDiscountType: 'percentage',
-            totalPrice: calculateItemTotal(itemId)
-          }
-        }),
-        additionalCosts: additionalCosts.map(cost => ({
-          description: cost.description,
-          amount: Number(cost.amount)
-        })),
-        autoUpdatePrice,
-        status: 'pending',
-        orderType,
-        reference,
-        notes: reference,
-        discount: discountValue ? Number(discountValue) : 0,
-        discountType: discountType || 'nominal',
-        subtotal: totals.items,
-        total: totals.total
-      }
-
       console.log('Sending purchase data:', JSON.stringify(purchaseData, null, 2))
 
       const response = await fetch('/api/purchases', {
@@ -334,7 +350,19 @@ export default function NewPurchasePage() {
         throw new Error(data?.error || 'Failed to create purchase')
       }
 
-      toast.success('Purchase created successfully')
+      // Download invoice if requested and purchaseId is available
+      if (downloadInvoiceAfterSave && data.purchaseId) {
+        try {
+          await downloadInvoice(data.purchaseId)
+          toast.success('Purchase created and invoice downloaded')
+        } catch (error) {
+          console.error('Failed to download invoice:', error)
+          toast.error('Purchase created but invoice download failed')
+        }
+      } else {
+        toast.success('Purchase created successfully')
+      }
+
       router.push('/dashboard/purchases')
     } catch (error) {
       console.error('Error creating purchase:', error)
@@ -400,6 +428,41 @@ export default function NewPurchasePage() {
     setAdditionalCosts(prev => prev.filter(cost => cost.id !== costId))
     toast.success('Additional cost removed successfully')
   }
+
+  // Function to download invoice
+  const downloadInvoice = async (purchaseId: string) => {
+    try {
+      // Fetch invoice data
+      const response = await fetch(`/api/purchases/download?id=${purchaseId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch invoice data');
+      }
+      
+      const invoiceData = await response.json();
+      
+      // Generate PDF invoice
+      const pdfBlob = await generateInvoice(invoiceData);
+      
+      // Create download link
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Invoice_${invoiceData.invoiceNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
+      
+      toast.success('Invoice downloaded successfully');
+    } catch (error) {
+      console.error('Error downloading invoice:', error);
+      toast.error('Failed to download invoice');
+    }
+  };
 
   return (
     <SidebarProvider>
@@ -842,6 +905,34 @@ export default function NewPurchasePage() {
                     {loading ? 'Saving...' : 'Save'}
                   </Button>
                 </div>
+                
+                <AlertDialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Simpan Pembelian</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Data pembelian telah disiapkan. Silakan pilih cara yang Anda inginkan untuk melanjutkan.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="flex flex-col space-y-2 sm:flex-row sm:space-x-2 sm:space-y-0">
+                      <AlertDialogCancel>Batal</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => savePurchase(false)}
+                        className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
+                      >
+                        <Save className="h-4 w-4" />
+                        Simpan Saja
+                      </AlertDialogAction>
+                      <AlertDialogAction 
+                        onClick={() => savePurchase(true)}
+                        className="bg-green-600 text-white hover:bg-green-700 gap-2"
+                      >
+                        <Download className="h-4 w-4" />
+                        Simpan & Unduh Invoice
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </form>
             </CardContent>
           </Card>

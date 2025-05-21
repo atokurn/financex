@@ -260,7 +260,11 @@ export async function POST(request: Request) {
       revalidatePath('/dashboard/purchases')
       
       return new Response(
-        JSON.stringify({ success: true, data: purchase }), 
+        JSON.stringify({ 
+          success: true, 
+          data: purchase,
+          purchaseId: purchase.id 
+        }), 
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       )
 

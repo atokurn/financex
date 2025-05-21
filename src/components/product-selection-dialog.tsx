@@ -69,14 +69,13 @@ export function ProductSelectionDialog({
   const [productType, setProductType] = useState("all")
   const [category, setCategory] = useState("all")
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
-  const [reference, setReference] = useState("")
 
   const items = [...products.map(p => ({
     ...p,
     itemType: 'product' as const,
     code: p.sku, // Map sku to code for consistent filtering
-    buyPrice: p.price, // Use price as buyPrice if not provided
-    sellPrice: p.price
+    buyPrice: p.buyPrice, 
+    sellPrice: p.sellPrice
   })), ...materials.map(m => ({
     ...m,
     itemType: 'material' as const,
@@ -180,8 +179,12 @@ export function ProductSelectionDialog({
                     </TableRow>
                   ) : (
                     filteredItems.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell>
+                      <TableRow 
+                        key={item.id} 
+                        className={`cursor-pointer ${selectedItems.has(item.id) ? 'bg-muted' : ''}`}
+                        onClick={() => toggleItem(item.id)}
+                      >
+                        <TableCell onClick={(e) => e.stopPropagation()}>
                           <Checkbox
                             checked={selectedItems.has(item.id)}
                             onCheckedChange={() => toggleItem(item.id)}
